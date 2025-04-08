@@ -1,0 +1,28 @@
+---
+# yamllint disable rule:line-length
+# Role variable returned variables are scoped to the current play only (e.g.
+# converge.yml) and must be tested between each application of the role. Test
+# these values while converging versus verify.yml (where scoping will prevent)
+# testing these values.
+- name: 'Pre release | converge'
+  hosts: 'all'
+  gather_facts: false
+  tasks:
+    - name: 'Pre release | converge | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_repo_gz'
+
+    - name: 'Pre release | converge | assert pre-release target URL'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'http://example.com/pre_tar'
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_repo_gz/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping

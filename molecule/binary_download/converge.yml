@@ -1,0 +1,146 @@
+---
+# yamllint disable rule:line-length
+# Role variable returned variables are scoped to the current play only (e.g.
+# converge.yml) and must be tested between each application of the role. Test
+# these values while converging versus verify.yml (where scoping will prevent)
+# testing these values.
+- name: 'Binary download | converge | binary, specifier'
+  hosts: 'all'
+  gather_facts: false
+  tasks:
+    - name: 'Binary download | converge | binary, specifier | URL | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_binary_enable: true
+        codeberg_binary_specifier: 'v'
+        codeberg_binary_url: '{VERSION}/Binary.{BARE_VERSION}.x86-64.tar.gz'
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_repo_gz'
+
+    - name: 'Binary download | converge | binary, specifier | URL | assert parameters'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'https://codeberg.org/leetreleaser/test_repo/releases/download/v1.0.0/Binary.1.0.0.x86-64.tar.gz'
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_repo_gz/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping
+
+    - name: 'Binary download | converge | binary, specifier | partial URL | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_binary_enable: true
+        codeberg_binary_specifier: 'v'
+        codeberg_binary_url: '{VERSION}/Binary.x86-64.tar.gz'
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_repo_gz_partial'
+
+    - name: 'Binary download | converge | binary, specifier | partial URL | assert parameters'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'https://codeberg.org/leetreleaser/test_repo/releases/download/v1.0.0/Binary.x86-64.tar.gz'
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_repo_gz_partial/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping
+
+    - name: 'Binary download | converge | binary, specifier | no URL | EXPECTED FAILURE'
+      block:
+        - name: 'Binary download | converge | binary, specifier | no URL | EXPECTED FAILURE | apply r_pufky.srv.codeberg'
+          ansible.builtin.include_role:
+            name: 'r_pufky.srv.codeberg'
+          vars:
+            codeberg_binary_enable: true
+            codeberg_binary_specifier: 'v'
+            codeberg_repo_archive_type: 'tar.gz'
+            codeberg_repo_owner: 'leetreleaser'
+            codeberg_repo_repo: 'test_repo'
+            codeberg_repo_release: 'latest'
+            codeberg_extract_dest: '/opt/test_repo_gz_fail'
+          register: _test_failure
+      rescue:
+        - name: 'Binary download | converge | binary, specifier | no URL | EXPECTED FAILURE | assert failure'
+          ansible.builtin.assert:
+            that:
+              - not _test_failure.changed
+            fail_msg: >
+              codeberg_binary_enable without codeberg_binary_url should FAIL.
+
+- name: 'Binary download | converge | binary, no specifier | URL'
+  hosts: 'all'
+  gather_facts: false
+  tasks:
+    - name: 'Binary download | converge | binary, no specifier | URL | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_binary_enable: true
+        codeberg_binary_url: '{VERSION}/Binary.{BARE_VERSION}.x86-64.tar.gz'
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_repo_gz'
+
+    - name: 'Binary download | converge | binary, no specifier | URL | assert parameters'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'https://codeberg.org/leetreleaser/test_repo/releases/download/v1.0.0/Binary.v1.0.0.x86-64.tar.gz'
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_repo_gz/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping
+
+    - name: 'Binary download | converge | binary, specifier | partial URL | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_binary_enable: true
+        codeberg_binary_specifier: 'v'
+        codeberg_binary_url: '{VERSION}/Binary.x86-64.tar.gz'
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_repo_gz_partial'
+
+    - name: 'Binary download | converge | binary, specifier | partial URL | assert parameters'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'https://codeberg.org/leetreleaser/test_repo/releases/download/v1.0.0/Binary.x86-64.tar.gz'
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_repo_gz_partial/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping
+
+    # Static URLs should override binary options without issue.
+    - name: 'Binary download | converge | binary | static URL | apply r_pufky.srv.codeberg'
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_binary_enable: true
+        codeberg_binary_specifier: 'v'
+        codeberg_binary_url: '{VERSION}/Binary.x86-64.tar.gz'
+        codeberg_binary_static_url: 'https://example.com/alt/repo/binary.tar.gz'
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'leetreleaser'
+        codeberg_repo_repo: 'test_repo'
+        codeberg_repo_release: 'latest'
+        codeberg_extract_dest: '/opt/test_static'
+
+    - name: 'Binary download | converge | binary, specifier | partial URL | assert parameters'
+      ansible.builtin.assert:
+        that:
+          - _codeberg_target == 'v1.0.0'
+          - _codeberg_target_url == 'http://example.com/tar'  # Test injects.
+          - _codeberg_archive == '/tmp/test_repo-v1.0.0.tar.gz'
+          - _codeberg_dir == '/opt/test_static/test_repo-v1.0.0'
+          - _codeberg_remote_metadata is mapping

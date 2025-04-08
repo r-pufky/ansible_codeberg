@@ -1,0 +1,92 @@
+---
+# yamllint disable rule:line-length
+###############################################################################
+# Unpack Codeberg Archive
+###############################################################################
+# Create versioned directory and unpack 'complete' archive.
+#
+# Args:
+#   _codeberg_archive: str - local versioned archive location.
+#   _codeberg_dir: str - local versioned extract location.
+#   _codeberg_extract_stat: stat - for existing extract location.
+
+- name: 'Extract | create extract directory'
+  when: not _codeberg_extract_stat.stat.exists
+  ansible.builtin.file:
+    path: '{{ _codeberg_dir }}'
+    owner: '{{ codeberg_file_owner }}'
+    group: '{{ codeberg_file_group }}'
+    mode: '{{ codeberg_extract_mode }}'
+    state: 'directory'
+
+- name: 'Extract | unpack archive'
+  when: not _codeberg_extract_stat.stat.exists
+  ansible.builtin.unarchive:
+    src: '{{ _codeberg_archive }}'
+    remote_src: true
+    dest: '{{ _codeberg_dir }}'
+    owner: '{{ codeberg_file_owner | default("root", true) }}'
+    group: '{{ codeberg_file_group | default("root", true) }}'
+    mode: '{{ codeberg_extract_mode | default("0644", true) }}'
+    extra_opts: '{{ codeberg_extract_extra_opts | default(omit, true) }}'
+
+- name: 'Extract | cleanup non-required archive source files'
+  when: >
+    not _codeberg_extract_stat.stat.exists and
+    codeberg_extract_remove_files | length > 0
+  ansible.builtin.file:
+    path: '{{ _codeberg_dir }}/{{ item }}'
+    state: 'absent'
+  loop: '{{ codeberg_extract_remove_files }}'
+
+- name: 'Extract | check for existing symlink'
+  ansible.builtin.stat:
+    path: '{{ codeberg_extract_symlink_target }}'
+  check_mode: true
+  register: _codeberg_symlink_stat
+
+# Migrate files before removing symlink to old version.
+- name: 'Extract | migrate'
+  when: >
+    _codeberg_symlink_stat.stat.exists and
+    codeberg_extract_migrate_files | length > 0
+  ansible.builtin.include_tasks: 'migrate.yml'
+  loop: '{{ codeberg_extract_migrate_files }}'
+
+- name: 'Extract | symlink {{ _codeberg_dir }} to {{ codeberg_extract_symlink_target }}'  # noqa name[template] provide full symlink info
+  when: codeberg_extract_symlink_target
+  ansible.builtin.file:
+    src: '{{ _codeberg_dir }}'
+    dest: '{{ codeberg_extract_symlink_target }}'
+    owner: '{{ codeberg_file_owner }}'
+    group: '{{ codeberg_file_group }}'
+    force: true
+    state: 'link'
+
+- name: 'Extract | remove old versions'
+  when: codeberg_extract_delete_old_versions
+  block:
+    - name: 'Extract | find existing extracted archives'
+      ansible.builtin.find:
+        paths: '{{ codeberg_extract_dest }}'
+        file_type: 'directory'
+        use_regex: true
+        patterns:
+          - '.*{{ codeberg_repo_repo }}-.*'
+        recurse: false
+      register: _codeberg_install_stat
+
+    - name: 'Extract | delete old versions'
+      when: _codeberg_target != item.path | basename | regex_replace(codeberg_repo_repo ~ '-', '')
+      ansible.builtin.file:
+        path: '{{ item.path }}'
+        state: 'absent'
+      loop: '{{ _codeberg_install_stat.files }}'
+      loop_control:
+        label: '{{ item.path }}'
+
+- name: 'Extract | cleanup staging archive'
+  when: codeberg_staging_clean
+  ansible.builtin.file:
+    path: '{{ _codeberg_archive }}'
+    state: 'absent'

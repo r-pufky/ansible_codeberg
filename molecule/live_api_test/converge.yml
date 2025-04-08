@@ -1,0 +1,21 @@
+---
+- name: 'Live API test | converge'
+  hosts: 'all'
+  gather_facts: false
+  tasks:
+    - name: 'Live API test | converge | apply r_pufky.srv.codeberg'
+      when: codeberg_live_api_enable
+      ansible.builtin.include_role:
+        name: 'r_pufky.srv.codeberg'
+      vars:
+        codeberg_repo_archive_type: 'tar.gz'
+        codeberg_repo_owner: 'forgejo'
+        codeberg_repo_repo: 'forgejo'
+        codeberg_repo_release: 'latest'
+        codeberg_file_owner: 'root'
+        codeberg_file_group: 'root'
+        codeberg_extract_dest: '/opt/forgejo'
+        codeberg_extract_extra_opts: '--strip-components=1'
+        codeberg_extract_mode: 'a-st,o-rwx'
+        codeberg_extract_remove_files:
+          - 'README.md'

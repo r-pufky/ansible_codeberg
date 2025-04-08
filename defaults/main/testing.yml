@@ -1,0 +1,34 @@
+---
+# yamllint disable rule:line-length
+###############################################################################
+# Codeberg Release Download Manager Testing
+###############################################################################
+# Options exposed specifically for unit testing dependent roles without
+# hammering Codeberg API's. These are not needed in normal operation.
+
+# Enable testing.
+#
+# This will disable API use and instead return testing values for requested
+# versions as well as a locally sourced archive to extract in place of
+# downloading the file from the Codeberg endpoint.
+#
+# molecule test -s live_api_test -- -v -e 'codeberg_testing_enable=true,codeberg_personal_access_token={TOKEN}'
+#
+# Default: False.
+codeberg_testing_enable: false
+
+# Release versions simulated to return.
+#
+# A list of versions may be used to simulate multiple Codeberg calls in a play.
+# Ordered with codeberg_testing_archives.
+#
+# Default: [].
+codeberg_testing_versions: []
+
+# Source locations of archive on ansible host to simulate downloading.
+#
+# File will be synchronize'd to the remote system. Ordered with
+# codeberg_testing_versions.
+#
+# Default: p[] (disabled).
+codeberg_testing_archives: []

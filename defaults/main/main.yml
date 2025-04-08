@@ -1,0 +1,274 @@
+---
+# yamllint disable rule:line-length
+###############################################################################
+# Codeberg Role Configuration
+###############################################################################
+# Codeberg release download manager.
+#
+# Determines 'latest' Codeberg repository version (or specified version) then
+# downloads, extracts, and stages that release in a given location.
+#
+# Archive will NOT be re-downloaded if a cached version exists and will NOT be
+# re-extracted if the extracted directory already exists; unless
+# codeberg_force_overwrite is set.
+#
+# Authenticated API requests are HIGHLY recommended to prevent 403 usage
+# denials.
+#
+# Reference:
+# * https://codeberg.org/api/swagger
+
+# Codeberg personal access token.
+#
+# Unauthenticated (anonymous) Codeberg API requests are heavily restricted and
+# will cause this role to fail with 403's if used frequently.
+#
+# Access Tokens:
+# * settings > applications > access tokens
+#   * name: {LABEL APPROPRIATELY}
+#   * Repository and Organization Access: Public only
+#   * Select Permissions: repository (read-only)
+#
+# Special Case:
+#   '': Anonymous (rated limited).
+#
+# Default: '' (anonymous).
+#
+# Reference:
+# * https://docs.codeberg.org/advanced/access-token/
+codeberg_personal_access_token: ''
+
+# Staging area for downloaded releases.
+#
+# Archive will be downloaded to this location. Location will be created using
+# codeberg_user, codeberg_group, with 0755 permissions if it does not exist.
+#
+# Default: '/tmp'.
+codeberg_staging_dir: '/tmp'
+
+# Force archive download and extraction.
+#
+# By default the archive will NOT be re-downloaded if a cached version exists
+# and will not be re-extracted if the extracted directory already exists.
+#
+# Default: False.
+codeberg_force_overwrite: false
+
+# Clean staged files after finished? Default: True.
+codeberg_staging_clean: true
+
+# Retry download number of times before failing. Default: 5.
+codeberg_download_retries: 5
+
+###############################################################################
+# Codeberg Local File Permissions
+###############################################################################
+# Downloaded and extracted file user permissions. User must be managed
+# externally.
+
+# Local files owner. Default: 'root'.
+codeberg_file_owner: 'root'
+
+# Local files group. Default: 'root'.
+codeberg_file_group: 'root'
+
+###############################################################################
+# Codeberg Repository
+###############################################################################
+
+# Codeberg repository owner. Default: ''.
+codeberg_repo_owner: ''
+
+# Codeberg repository name. Default: ''.
+codeberg_repo_repo: ''
+
+# Codeberg repository release. Default: 'latest'.
+codeberg_repo_release: 'latest'
+
+# Codeberg repository pre-releases.
+#
+# Include all releases when searching for latest, not just tagged releases.
+#
+# Default: False.
+codeberg_repo_pre_release_enable: false
+
+# Codeberg repository archive type.
+#
+# Values:
+#   tar.*: Download tarball release.
+#      xz: Download XZ release.  # TODO(role): update github as well.
+#     zip: Download zipball release.
+#
+# Default: 'tar.gz'.
+codeberg_repo_archive_type: 'tar.gz'
+
+###############################################################################
+# Codeberg Binary Archive
+###############################################################################
+# Role will download repositories primary archive by default. For most releases
+# this will be either source or a binary release. Certain repositories contain
+# both a source and a Binary release, or platform specific releases. Enabling
+# binary downloads allows selecting one of these releases to download instead.
+#
+# An example of this is Radarr, which the primary release archive is source,
+# with specific built binary releases based on platform. For this repository
+# you would enable binary archives to download the correct version.
+#
+# Reference:
+# * https://codeberg.org/forgejo/forgejo/releases/latest
+
+# Enable binary download instead of source release? Default: False.
+codeberg_binary_enable: false
+
+# Version specifier.
+#
+# Prepended text to a tag name delineating version:
+# * tag: v1.2.3
+# * specifier: v
+# * version: 1.2.3
+#
+# Default: '' (no specifier).
+codeberg_binary_specifier: ''
+
+# Binary release URL template.
+#
+# Use URL path after repository download URI. Must be specified if
+# codeberg_binary_enable=true.
+#
+# Special Case:
+#        {VERSION}: version detected or set (e.g. v1.2.3).
+#   {BARE_VERSION}: version detected or set with codeberg_repo_version_specifier
+#                   removed. If specifier is not found, {VERSION} is used.
+#                   (e.g. 1.2.3).
+#
+# codeberg_repo_owner: 'myuser'
+# codeberg_repo_repo: 'myrepo'
+# codeberg_repo_release: 'latest'  # (v5.18.4.9674)
+# codeberg_binary_url: '{VERSION}/Binary.{BARE_VERSION}.x86-64.tar.gz'
+#
+# Results in the following URL:
+# https://codeberg.org/myuser/myrepo/releases/download/v5.18.4.9674/Binary.5.18.4.9674.x86-64.tar.gz'
+#
+# Default: ''.
+codeberg_binary_url: ''
+
+# Binary release static URL.
+#
+# WARNING HERE BE DRAGONS.
+# > If you are using this, the repo owner is NOT using source control
+# > correctly. Strongly consider why you need to specify a URL outside of
+# > public Codeberg repositories to download a release (e.g. malicious code
+# > injection, etc).
+#
+# Complete URL to an archive resource. For repositories that only release
+# source code, but have an alternative URL for pre-build binaries which are not
+# hosted on Codeberg. All other processing applies as normal.
+#
+# Special Case:
+#   *: ALWAYS generates warning messages as this can be extremely dangerous.
+#   *: Only use if there are no other options.
+#   *: Overrides codeberg_binary_url if both are set. Version (tag) will always
+#      be set to the date that URL is accessed (Y-m-d). Potentially this means
+#      installing a new version every day the role is run.
+#
+# Default: ''.
+codeberg_binary_static_url: ''
+
+###############################################################################
+# Codeberg Archive Extraction Options
+###############################################################################
+# Options per ansible.builtin.unarchive.
+#
+# Reference:
+# * https://docs.ansible.com/ansible/latest/collections/ansible/builtin/unarchive_module.html
+
+# Extracted archive directory base.
+#
+# Archive will be extracted to this location in a sub directory with the format
+# codeberg_extract_dest/{REPO}-{VERSION}.
+#
+# Location will be created using codeberg_user, codeberg_group, and
+# codeberg_extract_mode if non-existing.
+#
+# codeberg_repo_repo: 'myrepo'
+# codeberg_repo_release: 'latest'
+# codeberg_extract_dest: '/opt/myrepo'
+#
+# Results (if latest version is v1.0.0): /opt/myrepo/myrepo-v1.0.0
+#
+# Default: '/tmp'.
+codeberg_extract_dest: '/tmp'
+
+# Create a symlink to the versioned extracted archive?
+#
+# Symlink will be FORCE created, linking the extracted versioned archive to the
+# specified location. The target root directory must exist.
+#
+# codeberg_repo_repo: 'myrepo'
+# codeberg_repo_release: 'latest'
+# codeberg_extract_dest: '/opt/myrepo'
+# codeberg_extract_symlink_target: '/opt/myrepo/myrepo'
+#
+# Results (if latest version is v1.0.0):
+#
+#   /opt/myrepo/myrepo -> /opt/myrepo/myrepo-v1.0.0
+#
+# Equivalent to: ln -s -f /opt/myrepo/myrepo-v1.0.0 /opt/myrepo/myrepo
+#
+# Special Case:
+#   '': disable symlink creation
+#
+# Default: '' (disabled).
+codeberg_extract_symlink_target: ''
+
+# Migrate listed files to newly installed release.
+#
+# After extraction and codeberg_extract_remove_files are removed, migrate files
+# from old version to the new version; preserving ownership and permissions.
+#
+# Special Case:
+#   * Explicitly list files from the release root, no globbing.
+#   * Requires codeberg_extract_symlink_target to be set.
+#   * Files are not migrated if it is a brand new installation.
+#   * Files that do not exist will not cause errors.
+#   * Directories are migrated recursively.
+#
+# codeberg_migrate_files:
+#   - 'config.db'  # v1.2/config.db -> v1.3/config.db
+#   - 'settings/alt/config.yaml'  # v1.2/settings/alt/config.yaml -> v1.3/settings/alt/config.yaml
+#   - 'data_directory'  # v1.2/data_directory/ -> v1.3/data_directory/
+#
+# Default: [] (no migration).
+codeberg_extract_migrate_files: []
+
+# Apply permissions to extracted files.
+#
+# Explicitly set extraction mode to avoid CVE-2020-1736.
+#
+# Default: 'a-st,o-rwx' (remove setuid, setgid, others).
+#
+# Reference:
+# * https://nvd.nist.gov/vuln/detail/CVE-2020-1736
+codeberg_extract_mode: 'a-st,o-rwx'
+
+# Extra options to apply to un-archiving tool.
+#
+# Most archives extract archive name as base directory; stripping the first
+# component will extract directly into destination.
+#
+# Default: '--strip-components=1'.
+codeberg_extract_extra_opts: '--strip-components=1'
+
+# List of extracted files to remove. Default: [] (none).
+codeberg_extract_remove_files: []
+
+# Delete old extracted archive versions?
+#
+# Existing directories in codeberg_extract_dest will be deleted if they do not
+# match the current specified version. Only directories matching
+# codeberg_repo_repo will be considered for deletion.
+#
+# This is data destructive. Ensure user data is stored somewhere else.
+#
+# Default: False.
+codeberg_extract_delete_old_versions: false

@@ -1,0 +1,59 @@
+---
+# yamllint disable rule:line-length
+###############################################################################
+# Codeberg Download
+###############################################################################
+# Download and validate archive release package from codeberg, using specified
+# version.
+#
+# Args:
+#   _codeberg_target: str - Full version (vx.x.x) to install.
+#   _codeberg_target_url: str - Download url for target release.
+#   _codeberg_archive: str - Local versioned archive location.
+#   _codeberg_staging_stat: stat - For existing staging location.
+#   _codeberg_cache_test_index: int - Current injected test archive item.
+
+- name: 'Download | create staging directory'
+  when: not _codeberg_staging_stat.stat.exists
+  ansible.builtin.file:
+    path: '{{ codeberg_staging_dir }}'
+    owner: '{{ codeberg_file_owner }}'
+    group: '{{ codeberg_file_group }}'
+    mode: '0755'
+    state: 'directory'
+
+- name: 'Download | {{ codeberg_repo_repo }} {{ _codeberg_target }}'  # noqa name[template] show full repo version
+  when: >
+    not _codeberg_archive_stat.stat.exists and
+    not (codeberg_testing_enable | default(false))
+  ansible.builtin.get_url:
+    url: '{{ _codeberg_target_url }}'
+    dest: '{{ _codeberg_archive }}'
+    owner: '{{ codeberg_file_owner }}'
+    group: '{{ codeberg_file_group }}'
+    mode: '{{ codeberg_extract_mode }}'
+    headers:
+      Authorization: '{{ codeberg_personal_access_token | default(omit) }}'
+  register: _codeberg_download
+  until: _codeberg_download is succeeded
+  retries: '{{ codeberg_download_retries }}'
+  delay: 2
+
+- name: 'Download'
+  when: (codeberg_testing_enable | default(false))
+  block:
+    - name: 'Download | inject downloaded archive'
+      when: codeberg_testing_archives | length > 0
+      ansible.posix.synchronize:
+        src: '{{ codeberg_testing_archives[_codeberg_cache_test_index | int] }}'
+        dest: '{{ _codeberg_archive }}'
+        archive: false
+        checksum: true
+
+    - name: 'Download | inject archive permissions'
+      ansible.builtin.file:
+        path: '{{ _codeberg_archive }}'
+        owner: '{{ codeberg_file_owner }}'
+        group: '{{ codeberg_file_group }}'
+        mode: '{{ codeberg_extract_mode }}'
+        state: 'file'

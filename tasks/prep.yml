@@ -1,0 +1,155 @@
+---
+# yamllint disable rule:line-length
+###############################################################################
+# Codeberg Prep
+###############################################################################
+# Prep Codeberg environment for release download management.
+#
+# API Endpoints:
+# * https://codeberg.org/api/v1/repos/{USER}/{REPO}/releases/latest
+# * https://codeberg.org/api/v1/repos/{USER}/{REPO}/releases/tags/{VERSION}
+# Access tokens must have 'contents:read' permissions.
+#
+# Install Methodology:
+# * If testing, extract sourced testing archive, set variables and exit.
+# * Determine version or 'latest' version to use.
+# * Install dependencies for downloading.
+# * Download to staging directory.
+# * Extract archive to target location.
+# * Set target permissions.
+# * Cleanup staged file if enabled.
+#
+# Generates:
+#   _codeberg_staging_stat: stat - For existing staging location.
+#   _codeberg_extract_stat: stat - For existing extract location.
+#   _codeberg_archive_stat: stat - For existing archive location.
+#   _codeberg_cache_test_index: int - Current injected test archive item.
+#
+# Exports:
+#   _codeberg_target: str - Full version (vx.x.x) to install.
+#   _codeberg_target_url: str - Download url for target release.
+#   _codeberg_archive: str - Local versioned archive location.
+#   _codeberg_dir: str - Local versioned target location.
+#   _codeberg_remote_metadata: dict - Release metadata for requested version.
+#   _codeberg_extract: bool - True if new archive extracted/installed.
+
+- name: 'Prep | assert binary URL'
+  when: codeberg_binary_enable
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - codeberg_binary_url | length > 0 or codeberg_binary_static_url | length > 0
+    fail_msg: >
+      codeberg_binary_url or codeberg_binary_static_url must be set if
+      codeberg_binary_enable=true.
+
+- name: 'Prep | WARNING'
+  when: codeberg_binary_static_url | length > 0
+  ansible.builtin.debug:
+    msg: |
+      WARNING: DOWNLOAD CANNOT BE VERIFIED.
+
+      Static URLs should ONLY be used for repositories without versioning which
+      release compiled binaries from a separate URL. These downloads can
+      contain malicious code and should be UNTRUSTED by default.
+
+      {{ codeberg_binary_static_url }}
+
+- name: 'Prep | build release queries'
+  ansible.builtin.set_fact:
+    _codeberg_base_url: '{{ codeberg_role_release_url_base }}/{{ codeberg_repo_owner }}/{{ codeberg_repo_repo }}/releases'
+    _codeberg_release_path: '/{{ "tags/" if codeberg_repo_release != "latest" }}{{ codeberg_repo_release }}'
+
+- name: 'Prep | get release metadata'
+  when: >
+    not (codeberg_testing_enable | default(false)) and
+    codeberg_binary_static_url | length == 0
+  ansible.builtin.uri:
+    url: '{{ _codeberg_base_url }}{{ "" if codeberg_repo_pre_release_enable else _codeberg_release_path }}'
+    return_content: true
+    headers:
+      Authorization: '{{ codeberg_personal_access_token | default(omit) }}'
+  register: _codeberg_remote_metadata
+
+# Set before testing for injection. Normal binary URL generate own metadata.
+- name: 'Prep | static URL download'
+  when: codeberg_binary_static_url | length > 0
+  ansible.builtin.set_fact:
+    _codeberg_remote_metadata: {"json": {"tag_name": "{{ now(utc=true, fmt='%Y-%m-%d') }}", "tarball_url": "{{ codeberg_binary_static_url }}", "zipball_url": "{{ codeberg_binary_static_url }}"}}
+
+- name: 'Prep | testing'
+  when: (codeberg_testing_enable | default(false))
+  block:
+    - name: 'Prep | testing | cache data'
+      ansible.builtin.set_fact:
+        _codeberg_cache_test_index: '{{ 0 if not _codeberg_cache_test_index is defined else _codeberg_cache_test_index | int + 1 }}'
+
+    - name: 'Prep | testing | inject get release metadata'
+      ansible.builtin.set_fact:
+        # TODO(role): check metadata returned for XZ files.
+        _codeberg_remote_metadata: '{{
+          {"json": {"tag_name": "{{ codeberg_testing_versions[_codeberg_cache_test_index | int ] }}", "tarball_url": "http://example.com/tar", "zipball_url": "http://example.com/zip"}}
+          if not codeberg_repo_pre_release_enable else
+          {"json": [{"tag_name": "{{ codeberg_testing_versions[_codeberg_cache_test_index | int ] }}", "tarball_url": "http://example.com/pre_tar", "zipball_url": "http://example.com/pre_zip"}]}
+          }}'
+
+- name: 'Prep | sanitize release metadata'
+  ansible.builtin.set_fact:
+    _codeberg_json: '{{ _codeberg_remote_metadata.json[0] if codeberg_repo_pre_release_enable else _codeberg_remote_metadata.json }}'
+
+- name: 'Prep | parse release metadata'
+  ansible.builtin.set_fact:
+    _codeberg_target: '{{ _codeberg_json.tag_name }}'
+    _codeberg_target_url: '{{ _codeberg_json.zipball_url if codeberg_repo_archive_type.startswith("zip") else _codeberg_json.tarball_url }}'
+
+- name: 'Prep | binary download'
+  when: codeberg_binary_enable and codeberg_binary_static_url | length == 0
+  block:
+    - name: 'Prep | binary download | split version on specifier'
+      ansible.builtin.set_fact:
+        _codeberg_target_bare: '{{ _codeberg_target if codeberg_binary_specifier == "" else _codeberg_target.split(codeberg_binary_specifier)[1:] | join(codeberg_binary_specifier) }}'
+
+    - name: 'Prep | binary download | parse binary path'
+      ansible.builtin.set_fact:
+        _codeberg_binary_path: '{{ codeberg_binary_url | regex_replace("{VERSION}", _codeberg_target) | regex_replace("{BARE_VERSION}", _codeberg_target_bare) }}'
+
+    - name: 'Prep | binary download | set target URL'
+      ansible.builtin.set_fact:
+        _codeberg_target_url: 'https://codeberg.org/{{ codeberg_repo_owner }}/{{ codeberg_repo_repo }}/releases/download/{{ _codeberg_binary_path | default(_codeberg_target_url) }}'
+
+- name: 'Prep | generate locations'
+  ansible.builtin.set_fact:
+    _codeberg_archive: '{{ codeberg_staging_dir }}/{{ codeberg_repo_repo }}-{{ _codeberg_target }}.{{ codeberg_repo_archive_type }}'
+    _codeberg_dir: '{{ codeberg_extract_dest }}/{{ codeberg_repo_repo }}-{{ _codeberg_target }}'
+
+- name: 'Prep | force overwrite enabled'
+  when: codeberg_force_overwrite
+  block:
+    - name: 'Prep | remove cached downloaded archive'
+      ansible.builtin.file:
+        path: '{{ _codeberg_archive }}'
+        state: 'absent'
+
+    - name: 'Prep | remove cached extracted release'
+      ansible.builtin.file:
+        path: '{{ _codeberg_dir }}'
+        state: 'absent'
+
+- name: 'Prep | check archive location'
+  ansible.builtin.stat:
+    path: '{{ _codeberg_archive }}'
+  register: _codeberg_archive_stat
+
+- name: 'Prep | check staging directory'
+  ansible.builtin.stat:
+    path: '{{ codeberg_staging_dir }}'
+  register: _codeberg_staging_stat
+
+- name: 'Prep | check extract directory'
+  ansible.builtin.stat:
+    path: '{{ _codeberg_dir }}'
+  register: _codeberg_extract_stat
+
+- name: 'Prep | set change state'
+  ansible.builtin.set_fact:
+    _codeberg_changed: '{{ not _codeberg_extract_stat.stat.exists }}'
